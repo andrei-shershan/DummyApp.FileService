@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DummyApp.FileService.Functions/DummyApp.FileService.Functions.csproj" />
+  </Folder>
+</Solution>
