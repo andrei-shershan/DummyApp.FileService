@@ -20,7 +20,7 @@ stages:
         version: '8.0.x'
       displayName: 'Use .NET 8 SDK'
 
-    - script: dotnet restore DummyApp.FileService.slnx
+    - script: dotnet restore src/DummyApp.FileService.Functions/DummyApp.FileService.Functions.csproj
       displayName: 'Restore NuGet packages'
 
     - script: >
