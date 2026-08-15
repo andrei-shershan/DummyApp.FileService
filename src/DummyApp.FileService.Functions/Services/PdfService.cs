@@ -1,5 +1,4 @@
 using System.IO;
-using QRCoder;
 using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
 using QuestPDF.Helpers;
@@ -8,9 +7,16 @@ namespace DummyApp.FileService.Functions.Services;
 
 public sealed class PdfService : IPdfService
 {
+    private readonly IQrCodeService _qrCodeService;
+
+    public PdfService(IQrCodeService qrCodeService)
+    {
+        _qrCodeService = qrCodeService;
+    }
+
     public byte[] GenerateTestPdf(string url)
     {
-        var qrBytes = GenerateQrCodePng(url);
+        var qrBytes = _qrCodeService.GenerateQrCodePng(url);
 
         using var ms = new MemoryStream();
 
@@ -69,11 +75,4 @@ public sealed class PdfService : IPdfService
         return ms.ToArray();
     }
 
-    private static byte[] GenerateQrCodePng(string text)
-    {
-        using var qrGenerator = new QRCodeGenerator();
-        using var qrData = qrGenerator.CreateQrCode(text, QRCodeGenerator.ECCLevel.Q);
-        var pngQrCode = new PngByteQRCode(qrData);
-        return pngQrCode.GetGraphic(20);
-    }
 }
