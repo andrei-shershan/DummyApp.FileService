@@ -103,20 +103,20 @@ public sealed class PdfService : IPdfService
 
                         table.Header(header =>
                         {
-                            header.Cell().Element(CellStyle).Text("Item");
-                            header.Cell().Element(CellStyle).Text("Description");
-                            header.Cell().Element(CellStyle).Text("Quantity");
-                            header.Cell().Element(CellStyle).Text("Size");
-                            header.Cell().Element(CellStyle).Text("Price");
+                            header.Cell().Element(CellStyle).Text("Item").WrapAnywhere();
+                            header.Cell().Element(CellStyle).Text("Description").WrapAnywhere();
+                            header.Cell().Element(CellStyle).Text("Quantity").WrapAnywhere();
+                            header.Cell().Element(CellStyle).Text("Size").WrapAnywhere();
+                            header.Cell().Element(CellStyle).Text("Price").WrapAnywhere();
                         });
 
                         foreach (var item in orderSummary.Items)
                         {
-                            table.Cell().Element(CellStyle).Text(item.Name);
-                            table.Cell().Element(CellStyle).Text(item.Description);
-                            table.Cell().Element(CellStyle).Text(item.Quantity.ToString());
-                            table.Cell().Element(CellStyle).Text(item.PrintSizeName);
-                            table.Cell().Element(CellStyle).Text(item.PriceValue.ToString("F2"));
+                            table.Cell().Element(CellStyle).Text(item.Name).WrapAnywhere();
+                            table.Cell().Element(CellStyle).Text(item.Description).WrapAnywhere();
+                            table.Cell().Element(CellStyle).Text(item.Quantity.ToString()).WrapAnywhere();
+                            table.Cell().Element(CellStyle).Text(item.PrintSizeName).WrapAnywhere();
+                            table.Cell().Element(CellStyle).Text(item.PriceValue.ToString("F2")).WrapAnywhere();
                         }
 
                         static IContainer CellStyle(IContainer container)
