@@ -13,6 +13,7 @@ var host = new HostBuilder()
     .ConfigureServices((context, services) =>
     {
         services.AddSingleton<IPdfService, PdfService>();
+        services.AddSingleton<IQrCodeService, QrCodeService>();
     })
     .Build();
 
