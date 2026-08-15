@@ -1,6 +1,9 @@
+using System.Text.Json;
+using DummyApp.FileService.Functions.Models;
+
 namespace DummyApp.FileService.Functions.Services;
 
 public interface IPdfService
 {
-    byte[] GenerateTestPdf(string url);
+    byte[] GeneratePdf(GeneratePdfRequest request);
 }

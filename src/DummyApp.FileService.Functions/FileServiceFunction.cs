@@ -1,6 +1,7 @@
 using System.IO;
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using DummyApp.FileService.Functions.Models;
 using DummyApp.FileService.Functions.Services;
 using Microsoft.Azure.Functions.Worker;
@@ -11,7 +12,11 @@ namespace DummyApp.FileService.Functions;
 
 public sealed class FileServiceFunction
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter() }
+    };
     private readonly IPdfService _pdfService;
     private readonly IQrCodeService _qrCodeService;
     private readonly ILogger<FileServiceFunction> _logger;
@@ -24,7 +29,7 @@ public sealed class FileServiceFunction
     }
 
     [Function("GeneratePdf")]
-    public async Task<HttpResponseData> Run(
+    public async Task<HttpResponseData> GeneratePdf(
 #if DEBUG
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "file/pdf")]
 #else
@@ -56,10 +61,35 @@ public sealed class FileServiceFunction
             return CreateBadRequest(req, "Request body is required.");
         }
 
-        var pdfBytes = _pdfService.GenerateTestPdf(request.Url ?? "https://example.com");
+        if (request.Template == PdfTemplate.Unknown)
+        {
+            return CreateBadRequest(req, "A valid PDF template is required.");
+        }
+
+        if (request.Parameters is null)
+        {
+            return CreateBadRequest(req, "Template parameters are required.");
+        }
+
+        byte[] pdfBytes;
+        try
+        {
+            pdfBytes = _pdfService.GeneratePdf(request);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Invalid template parameters in generate PDF request.");
+            return CreateBadRequest(req, "Template parameters have invalid JSON or wrong shape.");
+        }
+        catch (FormatException ex)
+        {
+            _logger.LogWarning(ex, "Invalid QR code base64 in generate PDF request.");
+            return CreateBadRequest(req, "QrCodeBase64 is not a valid base64 string.");
+        }
+
         var response = req.CreateResponse(HttpStatusCode.OK);
         response.Headers.Add("Content-Type", "application/pdf");
-        response.Headers.Add("Content-Disposition", "attachment; filename=generated.pdf");
+        response.Headers.Add("Content-Disposition", "attachment; filename=order-summary.pdf");
         await response.WriteBytesAsync(pdfBytes, cancellationToken);
         return response;
     }

@@ -1,7 +1,9 @@
 using System.IO;
+using System.Text.Json;
 using QuestPDF.Fluent;
 using QuestPDF.Infrastructure;
 using QuestPDF.Helpers;
+using DummyApp.FileService.Functions.Models;
 
 namespace DummyApp.FileService.Functions.Services;
 
@@ -14,9 +16,38 @@ public sealed class PdfService : IPdfService
         _qrCodeService = qrCodeService;
     }
 
-    public byte[] GenerateTestPdf(string url)
+    public byte[] GeneratePdf(GeneratePdfRequest request)
     {
-        var qrBytes = _qrCodeService.GenerateQrCodePng(url);
+        if (request.Parameters is null)
+        {
+            throw new ArgumentException("Template parameters are required.", nameof(request));
+        }
+
+        return request.Template switch
+        {
+            PdfTemplate.OrderSummary => GenerateOrderSummaryPdf(request.Parameters.Value),
+            _ => throw new ArgumentOutOfRangeException(nameof(request.Template), "Unsupported PDF template.")
+        };
+    }
+
+    private static OrderSummaryParameters DeserializeOrderSummaryParameters(JsonElement parameters)
+    {
+        return JsonSerializer.Deserialize<OrderSummaryParameters>(parameters.GetRawText(), new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        }) ?? throw new JsonException("Unable to deserialize OrderSummaryParameters.");
+    }
+
+    private byte[] GenerateOrderSummaryPdf(JsonElement parameters)
+    {
+        var orderSummary = DeserializeOrderSummaryParameters(parameters);
+        var qrCodeBase64 = orderSummary.QrCodeBase64;
+        if (string.IsNullOrWhiteSpace(qrCodeBase64))
+        {
+            throw new JsonException("QrCodeBase64 is required for OrderSummary parameters.");
+        }
+
+        var qrBytes = GetQrCodeBytes(qrCodeBase64);
 
         using var ms = new MemoryStream();
 
@@ -26,47 +57,73 @@ public sealed class PdfService : IPdfService
             {
                 page.Size(PageSizes.A4);
                 page.Margin(30);
-                page.DefaultTextStyle(x => x.FontSize(12));
+                page.DefaultTextStyle(x => x.FontSize(11));
+
+                page.Header().Text("Order Summary").FontSize(22).Bold().SemiBold();
 
                 page.Content().Column(column =>
                 {
-                    column.Item().Text("Тестовый PDF").FontSize(22).Bold();
-                    column.Item().PaddingTop(10).Text("Это PDF, сгенерированный внутри FileService.");
-                    column.Item().PaddingTop(15).Text("Ссылка:").SemiBold();
-                    column.Item().Text(text => text.Hyperlink(url, url));
+                    column.Item().PaddingBottom(15).Row(row =>
+                    {
+                        row.ConstantItem(220).Column(qr =>
+                        {
+                            qr.Item().Text("QR Code").FontSize(12).Bold();
+                            qr.Item().PaddingTop(5).Width(200).Image(qrBytes);
+                        });
 
-                    column.Item().PaddingTop(15).Text("Таблица:").SemiBold();
+                        row.RelativeItem().Column(details =>
+                        {
+                            details.Item().Text("Order Details").FontSize(12).Bold();
+                            details.Item().Text($"Status: {orderSummary.Status}").FontSize(11).SemiBold();
+
+                            if (orderSummary.Address is not null)
+                            {
+                                details.Item().PaddingTop(10).Text("Delivery Address").FontSize(12).Bold();
+                                details.Item().Text(orderSummary.Address.FirstName + " " + orderSummary.Address.LastName);
+                                details.Item().Text(orderSummary.Address.Email);
+                                details.Item().Text(orderSummary.Address.Phone);
+                                details.Item().Text($"{orderSummary.Address.Street} {orderSummary.Address.HouseNumber}");
+                                details.Item().Text($"{orderSummary.Address.PostalCode} {orderSummary.Address.City}");
+                                details.Item().Text(orderSummary.Address.Country);
+                            }
+                        });
+                    });
+
+                    column.Item().PaddingBottom(5).Text("Order Items").FontSize(12).Bold();
                     column.Item().Table(table =>
                     {
                         table.ColumnsDefinition(columns =>
                         {
+                            columns.RelativeColumn(2);
                             columns.RelativeColumn(3);
+                            columns.RelativeColumn(1);
+                            columns.RelativeColumn(1);
                             columns.RelativeColumn(1);
                         });
 
                         table.Header(header =>
                         {
-                            header.Cell().Element(CellStyle).Text("Название");
-                            header.Cell().Element(CellStyle).Text("Кол-во");
+                            header.Cell().Element(CellStyle).Text("Item");
+                            header.Cell().Element(CellStyle).Text("Description");
+                            header.Cell().Element(CellStyle).Text("Quantity");
+                            header.Cell().Element(CellStyle).Text("Size");
+                            header.Cell().Element(CellStyle).Text("Price");
                         });
 
-                        table.Cell().Element(CellStyle).Text("Продукт A");
-                        table.Cell().Element(CellStyle).Text("10");
-
-                        table.Cell().Element(CellStyle).Text("Продукт B");
-                        table.Cell().Element(CellStyle).Text("5");
-
-                        table.Cell().Element(CellStyle).Text("Продукт C");
-                        table.Cell().Element(CellStyle).Text("3");
+                        foreach (var item in orderSummary.Items)
+                        {
+                            table.Cell().Element(CellStyle).Text(item.Name);
+                            table.Cell().Element(CellStyle).Text(item.Description);
+                            table.Cell().Element(CellStyle).Text(item.Quantity.ToString());
+                            table.Cell().Element(CellStyle).Text(item.PrintSizeName);
+                            table.Cell().Element(CellStyle).Text(item.PriceValue.ToString("F2"));
+                        }
 
                         static IContainer CellStyle(IContainer container)
                         {
-                            return container.PaddingVertical(5).PaddingHorizontal(5);
+                            return container.Border(1).BorderColor(Colors.Grey.Lighten2).PaddingVertical(5).PaddingHorizontal(5);
                         }
                     });
-
-                    column.Item().PaddingTop(20).Text("QR-код:").SemiBold();
-                    column.Item().Image(qrBytes).FitWidth();
                 });
             });
         });
@@ -75,4 +132,14 @@ public sealed class PdfService : IPdfService
         return ms.ToArray();
     }
 
+    private static byte[] GetQrCodeBytes(string qrCodeBase64)
+    {
+        const string dataPrefix = "data:image/png;base64,";
+        if (qrCodeBase64.StartsWith(dataPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            qrCodeBase64 = qrCodeBase64[dataPrefix.Length..];
+        }
+
+        return Convert.FromBase64String(qrCodeBase64);
+    }
 }
