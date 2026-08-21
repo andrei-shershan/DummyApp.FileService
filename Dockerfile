@@ -1,14 +1,16 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+ARG BUILD_CONFIGURATION=Debug
 WORKDIR /src
 COPY ["src/DummyApp.FileService.Functions/DummyApp.FileService.Functions.csproj", "src/DummyApp.FileService.Functions/"]
 RUN dotnet restore "./src/DummyApp.FileService.Functions/DummyApp.FileService.Functions.csproj"
-COPY . .
+COPY ["src/DummyApp.FileService.Functions/", "src/DummyApp.FileService.Functions/"]
 WORKDIR "/src/src/DummyApp.FileService.Functions"
-RUN dotnet build "./DummyApp.FileService.Functions.csproj" -c Release -o /app/build /p:DefineConstants=DEBUG
+RUN dotnet build "./DummyApp.FileService.Functions.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 FROM build AS publish
+ARG BUILD_CONFIGURATION=Debug
 WORKDIR "/src/src/DummyApp.FileService.Functions"
-RUN dotnet publish "./DummyApp.FileService.Functions.csproj" -c Release -o /app/publish /p:DefineConstants=DEBUG
+RUN dotnet publish "./DummyApp.FileService.Functions.csproj" -c $BUILD_CONFIGURATION -o /app/publish
 
 FROM mcr.microsoft.com/azure-functions/dotnet-isolated:4 AS final
 WORKDIR /home/site/wwwroot
